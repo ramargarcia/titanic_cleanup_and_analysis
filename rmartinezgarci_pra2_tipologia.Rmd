@@ -1,0 +1,303 @@
+---
+title: "PRA2_Tipologia y Ciclo de vida de los datos"
+author: "Ramon Martinez"
+date: "1/3/2019"
+output: html_document
+---
+
+1. Descripción del dataset. ¿Por qué es importante y qué pregunta/problema pretende
+responder?
+
+He escogido el juego de datos de kaggle Titanic. 
+https://www.kaggle.com/c/titanic/data
+
+El dataset describe los pasajeros que iban a bordo del RMS Titanic y que protagonizó uno de los hundimientos más famosos de la historia el 15 de Abril de 1912. 1502 personas de un total de 2224 perdieron la vida, uno de los motivos principales del gran número de pérdidas fue debido a la falta de suficientes salvavidas para los pasajeros y la tripulación. 
+
+Tal y como describe la web de kaggle, a pesar de que la suerte estaba involucrada en las posibilidades de supervivencia o hundimiento, algunos grupos de personas tenían más opciones que otros, tales como las mujeres, niños o clases superiores.
+
+La finalidad de este dataset es la de analizar y predecir que pasajeros tenían más probabilidades de sobrevivir.
+
+
+2. Integración y selección de los datos de interés a analizar.
+
+El dataset está compuesto de 891 entradas (personas) con 12 atributos diferentes:
+
+PassangerId, que identifica al pasajero, es un integer
+Survived, si sobrevivió o no
+Pclass, Clase de viaje
+Name, Nombre del pasajero
+Sex, Género
+Age, Edad del pasajero
+SibSp, Número de hermanos/esposa a bordo
+Parch, número de padre/hijo a bordo
+Ticket
+Fare
+Cabin
+Embarked, Puerto de embarque, C-Cherbourg, S-Southampton, Q-Queenstown
+
+Como vemos, disponemos de atributos de los que podemos prescindir para nuestro análisis principal que será el de intentar predecir que pasajeros estaban más predispuestos a sobrevivir o no dependiendo de su sexo, edad y clase en la que viajaban. Analizaremos el atributo Survived que nos dirá si sobrevivió o no, la clase en la que viajaba, el sexo, la edad, si tenían hermanos/cónyuge o hijos/padres.
+
+```{r, echo=TRUE}
+#cargamos el dataset en la variable titanic
+titanic <- read.csv(file="/Users/ramon/pra2_tipologia/titanic.csv", header = TRUE)
+#dimensión del dataset
+dim(titanic)
+#Sumarizamos la información que tenemos
+summary(titanic)
+#Eliminamos las columnas que no nos interesan
+titanic <- titanic[, -(1)]
+titanic <- titanic[, -(3)]
+titanic <- titanic[, -(7:11)]
+
+```
+
+3. Limpieza de los datos.
+
+Comprobamos los tipos de datos de los que disponemos. Como se aprecia, hay atributos que debemos cambiar. Survived, Pclass, es un valor discreto, por lo tanto lo cambiamos a factor. 
+
+```{r, echo=TRUE}
+
+#Comprobamos que tipo de datos tenemos
+sapply(titanic, class)
+#Vemos que atributos son los subceptibles de ser factorizados, aquellas con pocas clases. Es decir los que mencionabamos con anterioridad, Survived, Pclass y Sex.
+apply(titanic,2, function(x) length(unique(x)))
+#convertimos los valores
+titanic$Survived <- as.factor(titanic$Survived)
+titanic$Pclass <- as.factor(titanic$Pclass)
+#Comprobamos de nuevo tras convertirlos
+sapply(titanic, class)
+```
+
+```{r, echo=TRUE}
+
+head(titanic)
+
+```
+
+3.1. ¿Los datos contienen ceros o elementos vacíos? ¿Cómo gestionarías cada uno
+de estos casos?
+
+Vemos que tenemos 177 entradas sin la edad, tenemos diferentes opciones para gestionar estos valores NA (Not Available):
+
+- Eliminar directamente las entradas que contengan estos valores.
+- eliminar la columna, que en nuestro caso no es buena idea ya que la edad es relevante. 
+- Imputar los valores perdidos, a través del cálculo de la mediana, media, kNN, etc.
+- Convertir a categórico y filtrar los valores NaN en una categoría propia.
+
+Si eliminamos las entradas que no contienen la edad perdemos bastantes datos, por lo que en principio vamos a evitarlo y nos centraremos en reemplazar esos valores por la media ya que no tenemos grandes outliners. 
+
+
+```{r, echo=TRUE}
+sapply(titanic, function(x) sum(is.na(x)))
+```
+
+La media es de 29.6, como todas las edades a excepción de los bebés menores de 1 año no tienen parte decimal vamos a redondear al alza para sustituir los valores NA haciendo uso de ceiling. Es decir, nos quedaría en 30.
+
+```{r, echo=TRUE}
+ceiling(mean(titanic$Age, na.rm=T))
+titanic$Age[is.na(titanic$Age)] <- ceiling(mean(titanic$Age, na.rm=T))  
+```
+
+Hemos sustituido los valores NA (Not Available) por la media de los valores de la edad quitando los NA para su cálculo.
+
+```{r, echo=TRUE}
+sapply(titanic, function(x) sum(is.na(x)))
+```
+
+Detección de campos vacios
+```{r, echo=TRUE}
+colSums(titanic=="")
+```
+
+3.2. Identificación y tratamiento de valores extremos.
+
+La identificación de los valores extremos es importante ya que puede producir cambios, tendencias en la exactitud de nuestras predicciones y estimaciones. Por lo tanto es esencial saber si debemos dejarlos o no.
+
+Los atributos categóricos tan solo nos aseguraremos de que no contienen valores no deseados, el único valor numérico al que podremos aplicar el boxplot es el de la edad y está representado abajo.
+
+Como vemos, Survived solo tiene dos niveles, por lo tanto no tendríamos valores extremos.
+
+```{r, echo=TRUE}
+table(titanic$Survived)
+```
+
+En la clase, tenemos primera, segunda y tercera clase, por lo tanto tampoco identificamos valores anomalos o extremos.
+
+```{r, echo=TRUE}
+table(titanic$Pclass)
+```
+
+Lo mismo sucede con el género, female o male.
+
+```{r, echo=TRUE}
+table(titanic$Sex)
+```
+
+En el valor continuo edad, sí que detectamos valores extremos como se puede apreciar en la gráfica inferior, estos valores están entre los 66 y los 80 años por lo que a pesar de que hay pocas personas en esta edad son valores normales y que tiene sentido dejar.
+
+```{r, echo=TRUE}
+boxplot(titanic$Age,main="Box plot", col="gray")
+boxplot.stats(titanic$Age)
+```
+
+Tenemos algunos valores extremos que van hasta 8 hermanos a bordo, aunque es un valor elevado puede ser perfectamente correcto por lo tanto los dejamos.
+
+```{r, echo=TRUE}
+boxplot(titanic$SibSp,main="Box plot", col="gray")
+boxplot.stats(titanic$SibSp)
+```
+
+Así mismo, tenemos valores extremos en el número de hijos que llega hasta los 6, al ser un valor posible lo dejamos también.
+
+```{r, echo=TRUE}
+boxplot(titanic$Parch,main="Box plot", col="gray")
+boxplot.stats(titanic$Parch)
+```
+
+
+4. Análisis de los datos.
+
+4.1. Selección de los grupos de datos que se quieren analizar/comparar
+(planificación de los análisis a aplicar).
+
+De los atributos seleccionados 
+
+
+
+4.2. Comprobación de la normalidad y homogeneidad de la varianza.
+
+```{r, echo=TRUE}
+library(nortest)
+alpha = 0.05
+col.names = colnames(titanic)
+for (i in 1:ncol(titanic)) {
+ if (i == 1) cat("Variables que no siguen una distribución normal:\n")
+ if (is.integer(titanic[,i]) | is.numeric(titanic[,i])) {
+  p_val = ad.test(titanic[,i])$p.value
+  if (p_val < alpha) {
+   cat(col.names[i])
+# Format output
+   if (i < ncol(titanic) - 1) cat(", ")
+   if (i %% 3 == 0) cat("\n")
+  }
+ }
+}
+```
+
+Para ver si las variables están normalizadas aplicamos el test shapiro en cada variable numérica.
+
+```{r, echo=TRUE}
+shapiro.test(titanic$Age)
+shapiro.test(titanic$SibSp)
+shapiro.test(titanic$Parch)
+```
+
+El resultado nos indica que ninguna variable está normalizada ya que el p-value es menor que el coficiente 0.05.
+
+4.3. Aplicación de pruebas estadísticas para comparar los grupos de datos. En
+función de los datos y el objetivo del estudio, aplicar pruebas de contraste de
+hipótesis, correlaciones, regresiones, etc.
+
+No podemos usar métodos de correlación debido a que la variable Survived es categórica y no numérica. 
+
+
+5. Representación de los resultados a partir de tablas y gráficas.
+
+Tabla con la relación de spervivientes, 342 sobrevivieron de los analizados en nuestro dataset, y 549 perecieron.
+
+```{r, echo=TRUE}
+table(titanic$Survived)
+```
+
+Tabla con la relación de personas por clase de viaje. 
+
+```{r, echo=TRUE}
+table(titanic$Pclass)
+```
+
+Gráfica comparativa de superviventes en función del sexo.
+
+```{r, echo=TRUE}
+library(ggplot2)
+library(dplyr)
+ggplot(data=titanic,aes(x=Sex,fill=Survived))+geom_bar()
+```
+
+Tabla con los valores numéricos. La mayoría de mujeres sobrevivieron (233) mientras que en el caso contrario la mayoría de hombres perecieron (468).
+
+```{r, echo=TRUE}
+table(titanic$Sex,titanic$Survived)
+```
+
+Gráfica comparativa en función del sexo y la clase en la que viajaban.
+
+```{r, echo=TRUE}
+ggplot(data = titanic,aes(x=Sex,fill=Survived))+geom_bar(position="fill")+facet_wrap(~Pclass)
+```
+
+Reprentaciones en función de la edad de los viajeros.
+
+```{r, echo=TRUE}
+ggplot(data = titanic,aes(x=Age,fill=Survived))+geom_bar(position="fill")+facet_wrap(~Sex)
+#Creamos un subset del dataset original para analizar el caso de los niños menores de 10 años.
+titanic2 <- subset(titanic, titanic$Age < 10)
+#Y representamos su tabla.
+table(titanic2$Age, titanic2$Survived)
+```
+
+Comparamos gráfico de frecuencia Survived - Parch
+
+```{r, echo=TRUE}
+ggplot(data = titanic,aes(x=Parch,fill=Survived))+geom_bar()
+```
+
+Tabla de frecuencia que muestra la comparativa Parch con Survived. Es decir si tienes 4 hijos o más las posibilidades de sobrevivir disminuyen drásticamente.
+
+```{r, echo=TRUE}
+table(titanic$Parch,titanic$Survived)
+```
+
+Comparamos gráfico de frecuencia Survived - SibSp
+
+```{r, echo=TRUE}
+ggplot(data = titanic,aes(x=SibSp,fill=Survived))+geom_bar()
+```
+
+Definimos una nueva variable llamada tamaño de familia, en la que sumamos la variable hermanos/cónyuge con hijos/padres.
+
+```{r, echo=TRUE}
+# Construimos un atributo nuevo: family size.
+titanic$FamSize <- titanic$SibSp + titanic$Parch +1;
+titanic1 <- titanic
+ggplot(data = titanic1[!is.na(titanic$FamSize),],aes(x=FamSize,fill=Survived))+geom_histogram(binwidth =1,position="fill")+ylab("Frecuencia")
+```
+
+Tabla que muestra la relación entre el nuevo atributo y la superviviencia.
+
+```{r, echo=TRUE}
+table(titanic$FamSize, titanic$Survived)
+```
+```{r, echo=TRUE}
+write.csv(titanic, "/Users/ramon/pra2_tipologia/titanic_data_clean.csv")
+```
+
+6. Resolución del problema. A partir de los resultados obtenidos, ¿cuáles son las
+conclusiones? ¿Los resultados permiten responder al problema?
+
+Como podemos apreciar en los resultados obtenidos, había más hombres que mujeres en el barco, pero las posibilidades de sobrevivir siendo mujer eran bastante superiores que si eras hombre.
+
+Por otro lado, las mujeres que viajaban en primera o segunda clase tenían bastantes posibilidades de supervivencia (+90%), sin embargo esta cifra se reducía a la mitad si viaja en tercera clase. 
+
+En el caso de los niños, los bebes de menos de un año corrieron mejor suerte que otros mejores de 10 años, ya que sí hubo caso en los que perdieron la vida (no es el caso en los bebés mencionados).
+
+En general, vemos que si se viaja con entre 2 y 4 miembros de la familia hay más posibilidades de sobrevivir que si se hace en solitario o con 5 o más miembros. 
+
+Podemos decir que sí responde al problema planteado, ya que a partir de estos resultados deducimos que si eres mujer tienes una mayor problabilidad de sobrevivir que si eres hombre, y que las clases 1 y 2 tienen bastantes más opciones que la 3. También hemos visto como si la familia que viaja se compone de entre 2 y 4 miembros las opciones de sobrevivir también son superiores que en otros casos, esto podría deberse a que en familias pequeñas los miembros se puede controlar y ayudar más fácilmente los unos a los otros.
+
+7. Código: Hay que adjuntar el código, preferiblemente en R, con el que se ha realizado la
+limpieza, análisis y representación de los datos. Si lo preferís, también podéis trabajar
+en Python. 
+
+El código se adjunta en el fichero Rmd.
+
+
